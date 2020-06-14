@@ -32,26 +32,26 @@ def _add_slots(yml, slots, tracker, break_early=False):
     return break_early
 
 
-def _add_responss(yml, responss):
+def _add_responses(yml, responses):
     for slot, values in yml.items():
-        respons = {}
+        response = {}
         if "upload" in values:
-            respons["custom"] = [{"text": values["utter"], "upload": values["upload"]}]
+            response["custom"] = [{"text": values["utter"], "upload": values["upload"]}]
         else:
-            respons["text"] = values["utter"]
+            response["text"] = values["utter"]
         if "options" in values:
-            respons["buttons"] = []
+            response["buttons"] = []
             for button in values["options"]:
-                respons["buttons"].append(
+                response["buttons"].append(
                     {"title": button["title"], "payload": button["payload"]}
                 )
                 if "slots" in button:
-                    responss = _add_responss(button["slots"], responss)
+                    responses = _add_responses(button["slots"], responses)
                 if "info" in button:
                     tname = f'utter_info_{slot}_{button["value"]}'
-                    responss[tname] = [{"text": button["info"]}]
-        responss[f"utter_ask_{slot}"] = [respons]
-    return responss
+                    responses[tname] = [{"text": button["info"]}]
+        responses[f"utter_ask_{slot}"] = [response]
+    return responses
 
 
 class MetaFormAction(FormAction):
@@ -106,15 +106,15 @@ class MetaFormAction(FormAction):
         try:
             return super().validate(dispatcher, tracker, domain)
         except ActionExecutionRejection as e:
-            dispatcher.utter_respons("utter_default", tracker)
+            dispatcher.utter_response("utter_default", tracker)
         return []
 
     @classmethod
     def validate_factory(cls, slot, fnc):
-        def validate_slot_respons(self, value, dispatcher, tracker, domain):
+        def validate_slot_response(self, value, dispatcher, tracker, domain):
             return fnc(self, value, dispatcher, tracker, domain)
 
-        setattr(cls, f"validate_{slot}", validate_slot_respons)
+        setattr(cls, f"validate_{slot}", validate_slot_response)
 
     @classmethod
     def add_validations(cls, yml):
@@ -127,7 +127,7 @@ class MetaFormAction(FormAction):
                             slots = {s: v}
                             for o in p["options"]:
                                 if v == o["value"]:
-                                    d.utter_respons(f"utter_info_{s}_{v}", t)
+                                    d.utter_response(f"utter_info_{s}_{v}", t)
                                     if "change_slot" in o:
                                         for sn, sv in o["change_slot"].items():
                                             slots[sn] = sv
@@ -139,7 +139,7 @@ class MetaFormAction(FormAction):
                         def validate_slot_fn(self, v, d, t, m, s=slot, p=prop):
                             for o in p["options"]:
                                 if v == o["value"]:
-                                    d.utter_respons(f"utter_info_{s}_{v}", t)
+                                    d.utter_response(f"utter_info_{s}_{v}", t)
                             return {s: v}
 
                         cls.validate_factory(slot, validate_slot_fn)
@@ -147,7 +147,7 @@ class MetaFormAction(FormAction):
                         cls.add_validations(optn["slots"])
 
     def submit(self, dispatcher, tracker, domain):
-        dispatcher.utter_respons("utter_submit", tracker)
+        dispatcher.utter_response("utter_submit", tracker)
         context = {}
         for slot in self.required_slots(tracker):
             context[slot] = tracker.get_slot(slot)
@@ -155,10 +155,10 @@ class MetaFormAction(FormAction):
         return []
 
     @classmethod
-    def domain_responss(cls):
-        responss = {}
-        responss = _add_responss(cls.yml["slots"], responss)
-        return responss
+    def domain_responses(cls):
+        responses = {}
+        responses = _add_responses(cls.yml["slots"], responses)
+        return responses
 
     @classmethod
     def update_domain(cls, domain_file="domain.yml", pre_domain_file="domain-pre.yml"):
@@ -168,9 +168,9 @@ class MetaFormAction(FormAction):
             domain["forms"] = []
         if not cls.name() in domain["forms"]:
             domain["forms"].append(cls.name())
-        responss = cls.domain_responss()
-        if not "responss" in domain:
-            domain["responss"] = {}
+        responses = cls.domain_responses()
+        if not "responses" in domain:
+            domain["responses"] = {}
         if not "slots" in domain:
             domain["slots"] = {}
         slots = []
@@ -178,8 +178,8 @@ class MetaFormAction(FormAction):
         for slot in slots:
             if not slot in domain["slots"]:
                 domain["slots"][slot] = {"type": "unfeaturized"}
-        for k, v in responss.items():
-            if not k in domain["responss"]:
-                domain["responss"][k] = v
+        for k, v in responses.items():
+            if not k in domain["responses"]:
+                domain["responses"][k] = v
         with open(domain_file, "w") as f:
             yaml.dump(domain, f)
